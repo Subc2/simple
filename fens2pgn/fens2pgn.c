@@ -17,18 +17,19 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * date: 2015-06-07
+ * date: 2015-07-22
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
 #include <ctype.h>
 #include <errno.h>
+#include <getopt.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.9
+#define VERSION "0.5.0"
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -40,10 +41,6 @@
 
 #define STR(x) STR_2(x)
 #define STR_2(x) # x
-
-enum read_parameters_exit_codes {
-	P_Do_Nothing, P_Error, P_Help, P_Usage, P_Version
-};
 
 enum what_to_write_exit_codes {
 	W_None, W_In_Line, W_In_Column, W_Both, W_Other,
@@ -81,14 +78,6 @@ const struct structure_instruction instructions_rook[4] = {{0, 1}, {1, 0}, {0, -
  * even numbered fields {0, 2} in array stands for white pawn,
  * whereas the odd ones {1, 3} stands for black pawn */
 const struct structure_instruction instructions_pawn[4] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
-
-struct structure_parameters {
-	bool validate;
-	bool quiet;
-	bool verbose;
-	char *read_from_file;
-	char *write_to_file;
-};
 
 const struct structure_suffixes {
 	char st[3];
@@ -421,54 +410,6 @@ void remove_castling(char type, char castling_prospects[])
 	return;
 }
 
-static inline int read_parameters(int argc, char *argv[], struct structure_parameters *parameters)
-{
-	if (argc < 2)
-		return P_Help;
-	bool omit_next_parameter = 0;
-	for (int i = 1; i < argc; ++i) {
-		if (omit_next_parameter == 1) {
-			omit_next_parameter = 0;
-			continue;
-		}
-		if (strncmp(&argv[i][0], "-h", 2) == 0 || strncmp(&argv[i][0], "--help", 6) == 0)
-			return P_Help;
-		else if (strncmp(&argv[i][0], "--usage", 6) == 0)
-			return P_Usage;
-		else if (strncmp(&argv[i][0], "--version", 6) == 0)
-			return P_Version;
-		else if (argv[i][0] == '-') {
-			for (int j = 1; argv[i][j] != '\0'; ++j)
-				switch (argv[i][j]) {
-					case 'f':
-						parameters->validate = 1;
-						break;
-					case 'o':
-						if (i + 1 < argc) {
-							parameters->write_to_file = argv[i + 1];
-							omit_next_parameter = 1;
-						} else
-							return P_Error;
-						break;
-					case 'q':
-						parameters->quiet = 1;
-						parameters->verbose = 0;
-						break;
-					case 'v':
-						parameters->quiet = 0;
-						parameters->verbose = 1;
-						break;
-					default:
-						return P_Error;
-				}
-		} else if (i == argc - 1)  // if it's the last parameter (input file name)
-			parameters->read_from_file = argv[i];
-		else
-			return P_Error;
-	}
-	return P_Do_Nothing;
-}
-
 // USAGE: swap_pointers((void **)&pointer_1, (void **)&pointer_2);
 static inline void swap_pointers(void **pointer_1, void **pointer_2)
 {
@@ -581,31 +522,68 @@ int what_to_write(const char (*Board)[8], const struct structure_field *Field, c
 
 int main(int argc, char *argv[])
 {
-	struct structure_parameters parameters = {0, 0, 0, '\0', '\0'};
-	switch (read_parameters(argc, argv, &parameters)) {
-		case P_Error:
-			fputs("Invalid argument(s) found.\n", stderr);
-			return EINVAL;
-		case P_Help:
-			puts("fens2pgn - converts multiple FENs into single PGN file\n"
-			"Syntax: fens2pgn [arguments] [output file] [input file]\n"
-			"Arguments:\n"
-			"  -f    force validity of every chess move\n"
-			"  -o    take next argument as output file\n"
-			"  -q    quiet - don't display information about omitted FENs and such to stderr\n"
-			"  -v    verbose - notify of every skipped FEN\n"
-			"  -h, --help    print this help text\n"
-			"  --usage       short usage information\n"
-			"  --version     display program version");
-			return 0;
-		case P_Usage:
-			puts("Syntax: fens2pgn [-foqvh] [--help] [--usage] [--version]\n"
-			"                 [-o OUTPUT_FILE] [INPUT_FILE]");
-			return 0;
-		case P_Version:
-			printf("fens2pgn %s\n"
-			"Copyright (C) 2015 Paweł Zacharek\n", STR(VERSION));
-			return 0;
+	const char Help[] = "fens2pgn - converts multiple FENs into single PGN file\n"
+	"Syntax: fens2pgn [arguments] [output file] [input file]\n"
+	"Arguments:\n"
+	"  -f    force validity of every chess move\n"
+	"  -o    take next argument as output file\n"
+	"  -q    quiet - doesn't print informations to stderr\n"
+	"  -v    verbose - notify of every skipped FEN\n"
+	"  -h, --help    print this help text\n"
+	"  -u, --usage   short usage information\n"
+	"  -V, --version display program version";
+	if (argc < 2) {
+		puts(Help);
+		return 0;
+	}
+	struct structure_parameters {
+		bool validate;
+		bool quiet;
+		bool verbose;
+		char *read_from_file;
+		char *write_to_file;
+	} parameters = {0, 0, 0, '\0', '\0'};
+	const struct option long_options[] = {
+		{"help", 0, '\0', 'h'},
+		{"usage", 0, '\0', 'u'},
+		{"version", 0, '\0', 'V'},
+		{'\0', 0, '\0', 0}
+	};
+	for (int option, long_option_index; (option = getopt_long(argc, argv, "fho:quvV", long_options, &long_option_index)) != -1;)
+		switch (option) {
+			case 'f':
+				parameters.validate = 1;
+				break;
+			case 'h':
+				puts(Help);
+				return 0;
+			case 'o':
+				parameters.write_to_file = optarg;
+				break;
+			case 'q':
+				parameters.quiet = 1;
+				parameters.verbose = 0;
+				break;
+			case 'u':
+				puts("Syntax: fens2pgn [-fqv] [-o OUTPUT_FILE] [INPUT_FILE]\n"
+				"                 [-h|--help] [-u|--usage] [-V|--version]");
+				return 0;
+			case 'v':
+				parameters.quiet = 0;
+				parameters.verbose = 1;
+				break;
+			case 'V':
+				puts("fens2pgn " VERSION "\n"
+				"Copyright (C) 2015 Paweł Zacharek");
+				return 0;
+			default:
+				return EINVAL;
+		}
+	if (optind == argc - 1)  // 1 unknown parameter (input file name)
+		parameters.read_from_file = argv[optind];
+	else if (optind != argc) {  // more unknown parameters
+		fputs("Invalid argument(s) found.\n", stderr);
+		return EINVAL;
 	}
 	FILE *input = (parameters.read_from_file == '\0' ? stdin : fopen(parameters.read_from_file, "r"));
 	FILE *output = (parameters.write_to_file == '\0' ? stdout : fopen(parameters.write_to_file, "w"));
