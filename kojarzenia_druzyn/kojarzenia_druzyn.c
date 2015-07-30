@@ -39,7 +39,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define WERSJA "0.6.6"
+#define WERSJA "0.6.7"
 
 #define MAX_NAZWA 30  // największa możliwa liczba znaków w nazwie drużyny
 
@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
 {
 	if (argc < 2) {
 		puts("kojarzenia_druzyn - wypisuje kojarzenia drużyn koszykówki\n"
-		"Składnia: kojarzenia_druzyn [-d PLIK] [-i PLIK] [-o PLIK]\n"
+		"Składnia: kojarzenia_druzyn [-d PLIK] [-i PLIK] [-o PLIK] [-v]\n"
 		"Argumenty:\n"
 		"  -d    określa plik, do którego mają zostać wypisane dane podawane na wejście\n"
 		"  -i    określa plik z danymi wejściowymi\n"
