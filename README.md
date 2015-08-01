@@ -6,3 +6,4 @@ Repository for simple programs like:
 * [konwersja](konwersja) - changes encoding and/or EOLs of input (*in Polish*)
 * [konwersja-legacy](konwersja-legacy) - version of [konwersja](konwersja) program written entirely in C (*in Polish*)
 * [tinycoreiso](tinycoreiso) - allows modifying Tiny Core Linux ISO images
+* [wielomiany](wielomiany) - computes rational roots of an integer polynomial (*in Polish*)
